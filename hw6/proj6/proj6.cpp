@@ -257,6 +257,8 @@ int TenStreamlinesOn;		// != 0 means to display 10 streamlines
 int RadioOption;
 float ProbXY[2];
 float ProbZ;
+int Gi,Gj,Gk;
+node Cubenodes[8];
 
 void
 RandomTenStreamlines()
@@ -437,7 +439,6 @@ RibbonTrace(node *vec0,node *vec1, node *vec2)
 
 
 
-
 // function prototypes:
 
 void	Animate( );
@@ -528,9 +529,12 @@ Animate( )
 
 
 	// force a call to Display( ) next time it is convenient:
+	if (RadioOption == 3)
+	{
+		glutSetWindow( MainWindow );
+		glutPostRedisplay( );
+	}
 
-	glutSetWindow( MainWindow );
-	glutPostRedisplay( );
 }
 
 
@@ -787,6 +791,100 @@ Display()
 		RibbonTrace(&Nodes[i][j][k-1], &Nodes[i][j][k], &Nodes[i][j][k+1]);
 		break;
 	}
+	case 3:
+	{
+			int i, j, k;
+			i = (int)(ProbXY[0] * .5) - NX / 2;
+			j = (int)(ProbXY[1] * .5) - NY / 2;
+			k = (int)(ProbZ*.5) - NZ / 2;
+			i = i > NX - 2 ? NX - 2 : i;
+			i = i < 0 ? 0 : i;
+			j = j > NY - 2 ? NY - 2 : j;
+			j = j < 0 ? 0 : j;
+			k = k > NZ - 2 ? NZ - 2 : k;
+			k = k < 0 ? 0 : k;
+
+			//1. test if prob is updated
+			int flagupdate;
+			if ((Gi == i) && (Gj == j) && (Gk == k))
+				flagupdate = 0;
+			else
+			{
+				Gi = i;
+				Gj = j;
+				Gk = k;
+				flagupdate = 1;			
+			}
+			//2. update cube vertices
+			if (flagupdate)
+			{
+				//v0
+				Cubenodes[0] = Nodes[Gi][Gj][Gk];
+				//v1
+				Cubenodes[1] =  Nodes[Gi + 1][Gj][Gk];
+				//v2
+				Cubenodes[2] = Nodes[Gi + 1][Gj][Gk + 1];
+				//v3
+				Cubenodes[3] = Nodes[Gi][Gj][Gk + 1];
+				//v4
+				Cubenodes[4] = Nodes[Gi][Gj + 1][Gk];
+				//v5
+				Cubenodes[5] = Nodes[Gi + 1][Gj + 1][Gk];
+				//v6
+				Cubenodes[6] = Nodes[Gi + 1][Gj + 1][Gk + 1];
+				//v7
+				Cubenodes[7] = Nodes[Gi][Gj + 1][Gk + 1];
+			}
+			//3. if vertices are in range 
+			//		draw()
+			int flagrange = 1;
+			for (int iA = 0; iA < 8; iA++)
+			{
+				flagrange = flagrange && (Cubenodes[iA].x < 1.) && (Cubenodes[iA].x>-1.);
+				flagrange = flagrange && (Cubenodes[iA].y < 1.) && (Cubenodes[iA].y>-1.);
+				flagrange = flagrange && (Cubenodes[iA].z < 1.) && (Cubenodes[iA].z>-1.);
+			}
+			if (flagrange)
+			{
+				ComputeColor(&Cubenodes[0]);
+				glColor3fv(Cubenodes[0].rgb);
+				Cube(&Cubenodes[0],
+					&Cubenodes[1],
+					&Cubenodes[2],
+					&Cubenodes[3],
+					&Cubenodes[4],
+					&Cubenodes[5],
+					&Cubenodes[6],
+					&Cubenodes[7]);
+			}
+			else
+			{
+			// not in range set to default nodes
+				Cubenodes[0] = Nodes[Gi][Gj][Gk];
+				//v1
+				Cubenodes[1] = Nodes[Gi + 1][Gj][Gk];
+				//v2
+				Cubenodes[2] = Nodes[Gi + 1][Gj][Gk + 1];
+				//v3
+				Cubenodes[3] = Nodes[Gi][Gj][Gk + 1];
+				//v4
+				Cubenodes[4] = Nodes[Gi][Gj + 1][Gk];
+				//v5
+				Cubenodes[5] = Nodes[Gi + 1][Gj + 1][Gk];
+				//v6
+				Cubenodes[6] = Nodes[Gi + 1][Gj + 1][Gk + 1];
+				//v7
+				Cubenodes[7] = Nodes[Gi][Gj + 1][Gk + 1];
+			}
+			//4. advect vertices
+			//v0
+			for (int iA = 0; iA < 8; iA++)
+			{
+				AdvectAdjust(.05, &Cubenodes[iA].x, &Cubenodes[iA].y, &Cubenodes[iA].z);
+			}
+			break;
+	}
+
 	default:
 		//
 		fprintf(stderr, "RdioOption at an unknown place.\n");
@@ -910,6 +1008,12 @@ InitGlui( )
 	Glui->add_checkbox( "Intensity Depth Cue", &DepthCueOn );
 
 	Glui->add_checkbox("Show Arrows", &ArrowsOn);
+	//arrow scale;
+	GLUI_Spinner *arrowscale_spinner = Glui->add_spinner("Arrow Scale",
+		GLUI_SPINNER_FLOAT,
+		&ArrowScale, NULL,
+		NULL);
+	arrowscale_spinner->set_float_limits(.01, .2, GLUI_LIMIT_CLAMP);
 
 	Glui->add_checkbox("Show extent", &ExtentOn);
 
@@ -937,16 +1041,6 @@ InitGlui( )
 	//		Glui->add_radiobutton_to_group( group, "Black" );
 
 
-
-
-
-
-	//arrow scale;
-	GLUI_Spinner *arrowscale_spinner = Glui->add_spinner("Arrow Scale",
-				GLUI_SPINNER_FLOAT,
-				&ArrowScale, NULL,
-				NULL);
-	arrowscale_spinner->set_float_limits(.01, .2, GLUI_LIMIT_CLAMP);
 
 	panel = Glui->add_panel( "Object Transformation" );
 
@@ -988,7 +1082,7 @@ InitGlui( )
 
 	// set the graphics window's idle function if needed:
 
-	GLUI_Master.set_glutIdleFunc( NULL );
+	GLUI_Master.set_glutIdleFunc( Animate );
 }
 
 
