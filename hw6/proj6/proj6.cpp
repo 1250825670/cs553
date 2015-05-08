@@ -364,37 +364,78 @@ Streamlines(node *vec)
 	}
 	glEnd();
 }
-
-
-
-const char *		WFISOFORMAT = { "wireframe isosurface: %5.2f" };
-float			WFISOCurrent = 5.;
-GLUI_HSlider *		WFISOSlider;
-GLUI_StaticText *	WFISOLabel;
-
-
-enum slider_id { WFISO_ID };
-
 void
-Sliders(int id)
+RibbonTrace(node *vec0,node *vec1, node *vec2)
 {
-	char str[32];
+	float x0, y0, z0;
+	x0 = vec0->x;
+	y0 = vec0->y;
+	z0 = vec0->z;
+	float x1, y1, z1;
+	x1 = vec1->x;
+	y1 = vec1->y;
+	z1 = vec1->z;
+	float x2, y2, z2;
+	x2 = vec2->x;
+	y2 = vec2->y;
+	z2 = vec2->z;
 
-	switch (id)
+	float x0p, y0p, z0p;
+	float x1p, y1p, z1p;
+	float x2p, y2p, z2p;
+
+	glColor3fv(vec1->rgb);
+	glBegin(GL_QUADS);
+	for (int i = 0; i < 100; i++)
 	{
+		if (x0<-1. || x0>1.) break;
+		if (y0<-1. || y0>1.) break;
+		if (z0<-1. || z0>1.) break;
 
-	case WFISO_ID:
-		sprintf(str, WFISOFORMAT, WFISOCurrent);
-		WFISOLabel->set_text(str);
-		break;
+		if (x1<-1. || x1>1.) break;
+		if (y1<-1. || y1>1.) break;
+		if (z1<-1. || z1>1.) break;
 
-	default:
-		fprintf(stderr, "Don't know what to do with Slider ID %d\n", id);
+		if (x2<-1. || x2>1.) break;
+		if (y2<-1. || y2>1.) break;
+		if (z2<-1. || z2>1.) break;
+
+		x0p = x0; y0p = y0; z0p = z0;
+		x1p = x1; y1p = y1; z1p = z1;
+		x2p = x2; y2p = y2; z2p = z2;
+
+		AdvectAdjust(.05, &x0p, &y0p, &z0p);
+		AdvectAdjust(.05, &x1p, &y1p, &z1p);
+		AdvectAdjust(.05, &x2p, &y2p, &z2p);
+
+		glVertex3f(x0, y0, z0);
+		glVertex3f(x0p, y0p, z0p);
+		glVertex3f(x1p, y1p, z1p);
+		glVertex3f(x1, y1, z1);
+
+		glVertex3f(x1, y1, z1);
+		glVertex3f(x1p, y1p, z1p);
+		glVertex3f(x2p, y2p, z2p);
+		glVertex3f(x2, y2, z2);
+
+		//float vx, vy, vz, vmag;
+		//GetVelocity(x, y, z, &vx, &vy, &vz);
+		//vmag = sqrt(SQR(vx) + SQR(vy) + SQR(vz));
+
+		//if (vmag < .005) break;
+
+		AdvectAdjust(.05, &x0, &y0, &z0);
+		AdvectAdjust(.05, &x1, &y1, &z1);
+		AdvectAdjust(.05, &x2, &y2, &z2);
+
+		AdvectAdjust(.05, &x0p, &y0p, &z0p);
+		AdvectAdjust(.05, &x1p, &y1p, &z1p);
+		AdvectAdjust(.05, &x2p, &y2p, &z2p);
 	}
-
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
+	glEnd();
 }
+
+
 
 
 // function prototypes:
@@ -709,7 +750,7 @@ Display()
 	case 1:
 	{
 		//streamline
-		fprintf(stderr, "X is %f, Y is %f, Z is %f\n", ProbXY[0], ProbXY[1], ProbZ);
+		//fprintf(stderr, "X is %f, Y is %f, Z is %f\n", ProbXY[0], ProbXY[1], ProbZ);
 		int i, j, k;
 		i = (int)(ProbXY[0] * .5) - NX / 2;
 		j = (int)(ProbXY[1] * .5) - NY / 2;
@@ -722,6 +763,28 @@ Display()
 		k = k < 0 ? 0 : k;
 
 		Streamlines(&Nodes[i][j][k]);
+		break;
+	}
+	case 2:
+	{
+		//assuming horizon line is Z. I draw one quad along positive Z and another quad along negtive Z.
+		//fprintf(stderr, "X is %f, Y is %f, Z is %f\n", ProbXY[0], ProbXY[1], ProbZ);
+		int i, j, k;
+		i = (int)(ProbXY[0] * .5) - NX / 2;
+		j = (int)(ProbXY[1] * .5) - NY / 2;
+		k = (int)(ProbZ*.5) - NZ / 2;
+		i = i > NX - 1 ? NX - 1 : i;
+		i = i < 0 ? 0 : i;
+		j = j > NY - 1 ? NY - 1 : j;
+		j = j < 0 ? 0 : j;
+		k = k > NZ - 1 ? NZ - 1 : k;
+		k = k < 0 ? 0 : k;		
+		//Because we draw quad along Z axis, range for Z need to shrink by two
+		// from[0,NZ-1] to [1,NZ-2]
+		k = k > NZ - 2 ? NZ - 2 : k;
+		k = k < 1 ? 1 : k;
+
+		RibbonTrace(&Nodes[i][j][k-1], &Nodes[i][j][k], &Nodes[i][j][k+1]);
 		break;
 	}
 	default:
