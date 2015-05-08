@@ -195,9 +195,10 @@ float	TransXYZ[3];		// set by glui translation widgets
 float VelMin ;
 float VelMax ;
 float ArrowScale = .2;
-#define NX	15
-#define NY	15
-#define NZ	15
+#define NX	30
+#define NY	30
+#define NZ	30
+int TenStreamlines[10][3];
 void	HsvRgb(float[3], float[3]);
 struct node
 {
@@ -251,6 +252,119 @@ ComputeColor(node *vector)
 
 int	ArrowsOn;				// != 0 means to display arrows
 int	ExtentOn;				// != 0 means to display extent
+int TenStreamlinesOn;		// != 0 means to display 10 streamlines
+
+int RadioOption;
+float ProbXY[2];
+float ProbZ;
+
+void
+RandomTenStreamlines()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		TenStreamlines[i][0] = rand() % NX;
+		TenStreamlines[i][1] = rand() % NY;
+		TenStreamlines[i][2] = rand() % NZ;
+		//fprintf(stderr, "%d th streamline starts at (%d,%d,%d)\n",i,TenStreamlines[i][0],TenStreamlines[i][1],TenStreamlines[i][2]);
+	}
+}
+
+void
+GetVelocity(float x, float y, float z, float *vxp, float *vyp, float *vzp)
+{
+	*vxp = y * z * (y*y + z*z);
+	*vyp = x * z * (x*x + z*z);
+	*vzp = x * y * (x*x + y*y);
+}
+
+void
+AdvectSecond(float t,float *x, float *y, float *z)
+{
+	node vecA;
+	vecA.x = *x;
+	vecA.y = *y;
+	vecA.z = *z;
+	ComputeVel(&vecA);
+
+	node vecB;
+	vecB.x = vecA.x + t * vecA.vx;
+	vecB.y = vecA.y + t * vecA.vy;
+	vecB.z = vecA.z + t * vecA.vz;
+	ComputeVel(&vecB);
+
+	float vx = (vecA.vx + vecB.vx)*.5;
+	float vy = (vecA.vy + vecB.vy)*.5;
+	float vz = (vecA.vz + vecB.vz)*.5;
+	
+	*x += t*vx;
+	*y += t*vy;
+	*z += t*vz;
+}
+
+void
+AdvectAdjust(float t,float *x, float *y, float *z)
+{
+	//float xw, yw, zw;
+	//xw = *x;
+	//yw = *y;
+	//zw = *z;
+	//AdvectSecond(t, &xw, &yw, &zw);
+
+	//float xh, yh, zh;
+	//xh = *x;
+	//yh = *y;
+	//zh = *z;
+	//AdvectSecond(t*.5, &xh, &yh, &zh);
+	//AdvectSecond(t*.5, &xh, &yh, &zh);
+
+
+	//float magw = sqrt(SQR(xw) + SQR(yw) + SQR(zw));
+	//float magh = sqrt(SQR(xh) + SQR(yh) + SQR(zh));
+	//if ((magw - magh< .1) && (magw - magh> -.1))
+	//{
+	//	*x = xh;
+	//	*y = yh;
+	//	*z = zh;
+	//	return;
+	//}
+	//AdvectAdjust(t*.5, x,y,z);
+	//AdvectAdjust(t*.5, x,y,z);
+
+
+	AdvectSecond(t, x, y, z);
+
+}
+
+void
+Streamlines(node *vec)
+{
+	float x, y, z;
+	x = vec->x;
+	y = vec->y;
+	z = vec->z;
+	glLineWidth(2.);
+	glColor3fv(vec->rgb);
+	glBegin(GL_LINE_STRIP);
+	for (int i = 0; i < 100; i++)
+	{
+		if (x<-1. || x>1.) break;
+		if (y<-1. || y>1.) break;
+		if (z<-1. || z>1.) break;
+
+		glVertex3f(x, y, z);
+
+		float vx, vy, vz, vmag;
+		GetVelocity(x, y, z, &vx, &vy, &vz);
+		vmag = sqrt(SQR(vx) + SQR(vy) + SQR(vz));
+
+		if (vmag < .005) break;
+
+		AdvectAdjust(.05,&x, &y, &z);
+	}
+	glEnd();
+}
+
 
 
 const char *		WFISOFORMAT = { "wireframe isosurface: %5.2f" };
@@ -574,8 +688,48 @@ Display()
 			&Nodes[NX-1][NY-1][NZ-1],
 			&Nodes[0][NY-1][NZ-1]);
 	}
+	
+	if (TenStreamlinesOn)
+	{
+		//glShadeModel(GL_SMOOTH);
+		//draw ten streamlines 
+		for (int i = 0; i < 10; i++)
+			// 1. As for Nodes[TenStreamlines[i][0]][TenStreamlines[i][1]][TenStreamlines[i][2]]
+			// 2. Draw line_strip
+			// 3. Take adjust Time Step
+			Streamlines(&Nodes[TenStreamlines[i][0]][TenStreamlines[i][1]][TenStreamlines[i][2]]);
 
-//	glShadeModel(GL_SMOOTH);
+	}
+
+	switch (RadioOption)
+	{
+	case 0:
+		//inactive
+		break;
+	case 1:
+	{
+		//streamline
+		fprintf(stderr, "X is %f, Y is %f, Z is %f\n", ProbXY[0], ProbXY[1], ProbZ);
+		int i, j, k;
+		i = (int)(ProbXY[0] * .5) - NX / 2;
+		j = (int)(ProbXY[1] * .5) - NY / 2;
+		k = (int)(ProbZ*.5) - NZ / 2;
+		i = i > NX - 1 ? NX - 1 : i;
+		i = i < 0 ? 0 : i;
+		j = j > NY - 1 ? NY - 1 : j;
+		j = j < 0 ? 0 : j;
+		k = k > NZ - 1 ? NZ - 1 : k;
+		k = k < 0 ? 0 : k;
+
+		Streamlines(&Nodes[i][j][k]);
+		break;
+	}
+	default:
+		//
+		fprintf(stderr, "RdioOption at an unknown place.\n");
+		break;
+	}
+
 
 
 	// draw some gratuitous text that just rotates on top of the scene:
@@ -696,6 +850,17 @@ InitGlui( )
 
 	Glui->add_checkbox("Show extent", &ExtentOn);
 
+	Glui->add_checkbox("Show 10 streamlines", &TenStreamlinesOn,NULL,(GLUI_Update_CB)RandomTenStreamlines);
+
+	panel = Glui->add_panel("Prob");
+	group = Glui->add_radiogroup_to_panel(panel, &RadioOption, NULL, NULL);
+	Glui->add_radiobutton_to_group(group, "Inactive");
+	Glui->add_radiobutton_to_group(group, "Streamline");
+	Glui->add_radiobutton_to_group(group, "Ribbon Trace");
+	Glui->add_radiobutton_to_group(group, "Blob Tracing");
+
+	Glui->add_translation_to_panel(panel, "translateXY", GLUI_TRANSLATION_XY, ProbXY, NULL, NULL);
+	Glui->add_translation_to_panel(panel, "translateZ", GLUI_TRANSLATION_Z, &ProbZ, NULL, NULL);
 
 	//panel = Glui->add_panel(  "Axes Color" );
 	//	group = Glui->add_radiogroup_to_panel( panel, &WhichColor );
@@ -708,15 +873,7 @@ InitGlui( )
 	//		Glui->add_radiobutton_to_group( group, "White" );
 	//		Glui->add_radiobutton_to_group( group, "Black" );
 
-	//add sliders for proj4
-	char str[128];
 
-	WFISOSlider = Glui->add_slider(false, GLUI_HSLIDER_FLOAT, &WFISOCurrent,
-		WFISO_ID, (GLUI_Update_CB)Sliders);
-	WFISOSlider->set_int_limits(0., 100.);
-	WFISOSlider->set_w(200);		// good slider width
-	sprintf(str, WFISOFORMAT, WFISOCurrent);
-	WFISOLabel = Glui->add_statictext(str);
 
 
 
@@ -726,7 +883,7 @@ InitGlui( )
 				GLUI_SPINNER_FLOAT,
 				&ArrowScale, NULL,
 				NULL);
-	arrowscale_spinner->set_float_limits(.05, 1., GLUI_LIMIT_CLAMP);
+	arrowscale_spinner->set_float_limits(.01, .2, GLUI_LIMIT_CLAMP);
 
 	panel = Glui->add_panel( "Object Transformation" );
 
@@ -1071,9 +1228,15 @@ MouseMotion( int x, int y )
 void
 Reset( )
 {
-	ArrowsOn = 0;
-	ArrowScale = .2;
+	ArrowsOn = false;
+	ExtentOn = false;
+	TenStreamlinesOn = false;
+	RadioOption = 0;
+	ArrowScale = .05;
 	ActiveButton = 0;
+	ProbXY[0] = .0;
+	ProbXY[1] = .0;
+	ProbZ = .0;
 	AxesOn = GLUITRUE;
 	DebugOn = GLUIFALSE;
 	DepthCueOn = GLUIFALSE;
