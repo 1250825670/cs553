@@ -279,41 +279,52 @@ public:
 	void
 		RecurBreakHPline(int mode, struct xy *p0, struct xy *p1)
 	{
-			//struct xy nodeA, nodeB;
-			//nodeA.x = (p0->x + p1->x)*.5;
-			//nodeA.y = (p0->y + p1->y)*.5;
+			struct xy nodeA, nodeB;
+			struct xy p0p, p1p;
+			p0p.x = p0->x;
+			p0p.y = p0->y;
+			p1p.x = p1->x;
+			p1p.y = p1->y;
 
-			//this->CovertHP(mode, &nodeA);
-			//this->CovertHP(mode, p0);
-			//this->CovertHP(mode, p1);
-			//
-			//nodeB.x = (p0->x + p1->x)*.5;
-			//nodeB.y = (p0->y + p1->y)*.5;
+			nodeA.x = (p0p.x + p1p.x)*.5;
+			nodeA.y = (p0p.y + p1p.y)*.5;
 
-			//float mag = sqrt(SQR(nodeA.x - nodeB.x) + SQR(nodeA.y - nodeB.y));
+			struct xy nodeAp;
+			nodeAp.x = nodeA.x;
+			nodeAp.y = nodeA.y;
+
+			this->CovertHP(mode, &nodeAp);
+			this->CovertHP(mode, &p0p);
+			this->CovertHP(mode, &p1p);
+			
+			nodeB.x = (p0p.x + p1p.x)*.5;
+			nodeB.y = (p0p.y + p1p.y)*.5;
+
+			float mag = sqrt(SQR(nodeAp.x - nodeB.x) + SQR(nodeAp.y - nodeB.y));
 			//fprintf(stderr, "mag = %f\n", mag);
-			//if (mag < .1)
-			//{
-			//	glVertex2f(p0->x, p0->y);
-			//	glVertex2f(nodeB.x, nodeB.y);
-			//	return;
-			//}
-			//else
-			//{
-			//	RecurBreakHPline(mode, p0, &nodeA);
-			//	RecurBreakHPline(mode, &nodeA, p1);
-			//}
-
-			//hard break 20 times
-			struct xy tempnode;
-
-			for (int i = 0; i < 20; i++)
+			if (mag < .0001)
 			{
-				float t = ((float)i )*(1./20.);
-				tempnode.x = p0->x + t*(p1->x - p0->x);
-				tempnode.y = p0->y + t*(p1->y - p0->y);
-				glVertex2f(tempnode.x, tempnode.y);
+				glVertex2f(p0p.x, p0p.y);
+				glVertex2f(nodeAp.x, nodeAp.y);
+
 			}
+			else
+			{
+				RecurBreakHPline(mode, p0, &nodeA);
+				RecurBreakHPline(mode, &nodeA, p1);
+			}
+
+			////hard break 20 times
+			//struct xy tempnode;
+
+			//for (int i = 0; i < 20; i++)
+			//{
+			//	float t = ((float)i )*(1./20.);
+			//	tempnode.x = p0->x + t*(p1->x - p0->x);
+			//	tempnode.y = p0->y + t*(p1->y - p0->y);
+			//	this->CovertHP(mode, &tempnode);
+			//	glVertex2f(tempnode.x, tempnode.y);
+			//}
 		}
 
 	// method to display the linestrip:
@@ -339,19 +350,19 @@ public:
 								vec.x = pts[i].x + TransXYZ[0];
 								vec.y = pts[i].y + TransXYZ[1];
 								//take care the last one
-								if ((!BreaklinesOn) && (i!=npts-1))
+								if ((BreaklinesOn) && (i!=(npts-1)))
 								{
-									this->CovertHP(0, &vec);
-									glVertex2f(vec.x, vec.y);
+									struct xy vecA, vecB;
+									vecA.x = pts[i].x + TransXYZ[0];
+									vecA.y = pts[i].y + TransXYZ[1];
+									vecB.x = pts[i + 1].x + TransXYZ[0];
+									vecB.y = pts[i + 1].y + TransXYZ[1];
+									RecurBreakHPline(0, &vecA, &vecB);
 								}
 								else
 								{
-									struct xy vecA,vecB;
-									vecA.x = pts[i].x + TransXYZ[0];
-									vecA.y = pts[i].y + TransXYZ[1];
-									vecB.x = pts[i+1].x + TransXYZ[0];
-									vecB.y = pts[i+1].y + TransXYZ[1];
-									RecurBreakHPline(0,&vecA, &vecB);
+									this->CovertHP(0, &vec);
+									glVertex2f(vec.x, vec.y);
 								}
 								
 					break;
@@ -363,19 +374,19 @@ public:
 								vec.y = pts[i].y + TransXYZ[1];
 
 								// take care the last one
-								if ((!BreaklinesOn) && (i != npts - 1))
-								{
-									this->CovertHP(1, &vec);
-									glVertex2f(vec.x, vec.y);
-								}
-								else
+								if ((BreaklinesOn) && (i != (npts - 1)))
 								{
 									struct xy vecA, vecB;
 									vecA.x = pts[i].x + TransXYZ[0];
 									vecA.y = pts[i].y + TransXYZ[1];
 									vecB.x = pts[i + 1].x + TransXYZ[0];
 									vecB.y = pts[i + 1].y + TransXYZ[1];
-									RecurBreakHPline(1, &vecA, &vecB);
+									RecurBreakHPline(1, &vecA, &vecB); 
+								}
+								else
+								{
+									this->CovertHP(1, &vec);
+									glVertex2f(vec.x, vec.y);
 								}
 					break;
 					}
