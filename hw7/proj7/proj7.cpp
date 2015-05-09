@@ -193,17 +193,42 @@ float	TransXYZ[3];		// set by glui translation widgets
 
 // global varialbes and function for proj7
 const float MatrixGreen[3] {0., 0.796875, 0.};
+
 struct xy
 {
 	float x, y;
 };
 
+enum HB_TYPE { HB_OFF, HB_POLO, HB_CART };
+
+const char *		KFORMAT = { "K: %5.2f" };
+float			KCurrent = .2;
+GLUI_HSlider *		KSlider;
+GLUI_StaticText *	KLabel;
+
+int RadioOption;
+int BreaklinesOn = 0;
+inline float SQR(float x)
+{
+	return x * x;
+}
+void
+Slider()
+{
+	char str[32];
+
+	sprintf(str, KFORMAT, KCurrent);
+	KLabel->set_text(str);
+	
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
 class Linestrip
 {
 public:
 	int npts;		// # of points in the line strip
 	struct xy *pts;		// array of point structures
-
+	
 	// constructor:
 
 	Linestrip(int n = 100)
@@ -212,18 +237,153 @@ public:
 		pts = new struct xy[n];
 	}
 
+	// method to covert HB_P or HB_C
+	void
+		CovertHP(int mode, struct xy *vec)
+	{
+			switch (mode)
+			{
+			case 0:
+			{
+					  //r = x2+y2
+					  //cos = x/r
+					  //sin = y/r
+					  //r'= r/r+k
+					  //x'= r'*cos
+					  //y' = r'*sin
+
+
+					  float r = sqrt(SQR(vec->x) + SQR(vec->y));
+					  vec->x = vec->x / (r + KCurrent);
+					  vec->y = vec->y / (r + KCurrent);
+
+					  break;
+			}
+			case 1:
+			{								
+					  //x' = x / sqrt( x*x + K*K ) 
+					  //y' = y / sqrt( y*y + K*K )
+
+
+					  vec->x = vec->x / (sqrt(SQR(vec->x) + SQR(KCurrent)));
+					  vec->y = vec->y / (sqrt(SQR(vec->y) + SQR(KCurrent)));
+					  break;
+			}
+			default:
+				fprintf(stderr, "convert to an unknown HB mode\n");
+				break;
+			}
+	}
+
+	// method to recursively draw midpoints from P0 to P1
+	void
+		RecurBreakHPline(int mode, struct xy *p0, struct xy *p1)
+	{
+			//struct xy nodeA, nodeB;
+			//nodeA.x = (p0->x + p1->x)*.5;
+			//nodeA.y = (p0->y + p1->y)*.5;
+
+			//this->CovertHP(mode, &nodeA);
+			//this->CovertHP(mode, p0);
+			//this->CovertHP(mode, p1);
+			//
+			//nodeB.x = (p0->x + p1->x)*.5;
+			//nodeB.y = (p0->y + p1->y)*.5;
+
+			//float mag = sqrt(SQR(nodeA.x - nodeB.x) + SQR(nodeA.y - nodeB.y));
+			//fprintf(stderr, "mag = %f\n", mag);
+			//if (mag < .1)
+			//{
+			//	glVertex2f(p0->x, p0->y);
+			//	glVertex2f(nodeB.x, nodeB.y);
+			//	return;
+			//}
+			//else
+			//{
+			//	RecurBreakHPline(mode, p0, &nodeA);
+			//	RecurBreakHPline(mode, &nodeA, p1);
+			//}
+
+			//hard break 20 times
+			struct xy tempnode;
+
+			for (int i = 0; i < 20; i++)
+			{
+				float t = ((float)i )*(1./20.);
+				tempnode.x = p0->x + t*(p1->x - p0->x);
+				tempnode.y = p0->y + t*(p1->y - p0->y);
+				glVertex2f(tempnode.x, tempnode.y);
+			}
+		}
 
 	// method to display the linestrip:
-
 	void
-		Display()
+		Display(HB_TYPE hptype)
 	{
 			glBegin(GL_LINE_STRIP);
 			glColor3fv(MatrixGreen);
 			for (int i = 0; i < npts; i++)
 			{
-				// Breaklines here
-				glVertex2f(pts[i].x, pts[i].y);
+				switch (hptype)
+				{
+				case HB_OFF:
+					{
+						float xp = pts[i].x + TransXYZ[0];
+						float yp = pts[i].y + TransXYZ[1];
+						glVertex2f(xp, yp);
+						break;
+					}
+				case HB_POLO:
+					{
+								struct xy vec;
+								vec.x = pts[i].x + TransXYZ[0];
+								vec.y = pts[i].y + TransXYZ[1];
+								//take care the last one
+								if ((!BreaklinesOn) && (i!=npts-1))
+								{
+									this->CovertHP(0, &vec);
+									glVertex2f(vec.x, vec.y);
+								}
+								else
+								{
+									struct xy vecA,vecB;
+									vecA.x = pts[i].x + TransXYZ[0];
+									vecA.y = pts[i].y + TransXYZ[1];
+									vecB.x = pts[i+1].x + TransXYZ[0];
+									vecB.y = pts[i+1].y + TransXYZ[1];
+									RecurBreakHPline(0,&vecA, &vecB);
+								}
+								
+					break;
+					}
+				case HB_CART:
+					{
+								struct xy vec;
+								vec.x = pts[i].x + TransXYZ[0];
+								vec.y = pts[i].y + TransXYZ[1];
+
+								// take care the last one
+								if ((!BreaklinesOn) && (i != npts - 1))
+								{
+									this->CovertHP(1, &vec);
+									glVertex2f(vec.x, vec.y);
+								}
+								else
+								{
+									struct xy vecA, vecB;
+									vecA.x = pts[i].x + TransXYZ[0];
+									vecA.y = pts[i].y + TransXYZ[1];
+									vecB.x = pts[i + 1].x + TransXYZ[0];
+									vecB.y = pts[i + 1].y + TransXYZ[1];
+									RecurBreakHPline(1, &vecA, &vecB);
+								}
+					break;
+					}
+				default:
+					fprintf(stderr, "radio point to an unknown option\n");
+					break;
+				}
+
 			}
 			glEnd();
 		}
@@ -233,10 +393,7 @@ Linestrip  *Outlines[68];	// 68 linestrips in usa map
 
 void	HsvRgb(float[3], float[3]);
 
-inline float SQR(float x)
-{
-	return x * x;
-}
+
 
 
 struct centers
@@ -455,8 +612,8 @@ Display()
 	// widget more intuitively match the translate behavior
 	// DO NOT TRANSLATE IN Z IF YOU ARE DOING 2D !
 
-	glTranslatef((GLfloat)TransXYZ[0], (GLfloat)TransXYZ[1],0.);
-
+	//glTranslatef((GLfloat)TransXYZ[0], (GLfloat)TransXYZ[1],0.);
+	
 
 	// rotate the scene:
 	// DO NOT ROTATE (EXCEPT ABOUT Z) IF YOU ARE DOING 2D !
@@ -469,11 +626,11 @@ Display()
 
 	// uniformly scale the scene:
 
-	glScalef((GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale);
-	GLfloat scale2 = 1. + Scale2;		// because glui translation starts at 0.
-	if (scale2 < MINSCALE)
-		scale2 = MINSCALE;
-	glScalef((GLfloat)scale2, (GLfloat)scale2, (GLfloat)scale2);
+	//glScalef((GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale);
+	//GLfloat scale2 = 1. + Scale2;		// because glui translation starts at 0.
+	//if (scale2 < MINSCALE)
+	//	scale2 = MINSCALE;
+	//glScalef((GLfloat)scale2, (GLfloat)scale2, (GLfloat)scale2);
 
 
 	// set the fog parameters:
@@ -510,12 +667,12 @@ Display()
 
 	// draw the current object:
 
-	//glCallList( PointList );
+
 
 	
 	for (int i = 0; i < 68; i++)
 	{
-		Outlines[i]->Display();
+		Outlines[i]->Display((HB_TYPE)RadioOption);
 	}
 	
 
@@ -630,13 +787,21 @@ InitGlui( )
 	Glui->add_separator( );
 
 
+	Glui->add_checkbox("Break lines", &BreaklinesOn);
+	panel = Glui->add_panel("Hyperbolic mode");
+	group = Glui->add_radiogroup_to_panel(panel, &RadioOption, NULL, NULL);
+	Glui->add_radiobutton_to_group(group, "Off");
+	Glui->add_radiobutton_to_group(group, "Polar");
+	Glui->add_radiobutton_to_group(group, "Cartesian");
 	
-	//arrow scale;
-	/*GLUI_Spinner *arrowscale_spinner = Glui->add_spinner("Arrow Scale",
-		GLUI_SPINNER_FLOAT,
-		&ArrowScale, NULL,
-		NULL);
-	arrowscale_spinner->set_float_limits(.01, .2, GLUI_LIMIT_CLAMP);*/
+	char str[128];
+
+	KSlider = Glui->add_slider_to_panel(panel,false, GLUI_HSLIDER_FLOAT, &KCurrent,
+		NULL, (GLUI_Update_CB)Slider);
+	KSlider->set_float_limits(0.01, 5.);
+	KSlider->set_w(200);		// good slider width
+	sprintf(str, KFORMAT, KCurrent);
+	KLabel = Glui->add_statictext(str);
 
 	
 
@@ -655,11 +820,6 @@ InitGlui( )
 
 	panel = Glui->add_panel( "Object Transformation" );
 
-
-
-		Glui->add_column_to_panel( panel, GLUIFALSE );
-		scale = Glui->add_translation_to_panel( panel, "Scale",  GLUI_TRANSLATION_Y , &Scale2 );
-		scale->set_speed( 0.005f );
 
 		Glui->add_column_to_panel( panel, GLUIFALSE );
 		trans = Glui->add_translation_to_panel( panel, "Trans XY", GLUI_TRANSLATION_XY, &TransXYZ[0] );
@@ -711,8 +871,8 @@ InitGraphics( )
 		for (int j = 0; j < npts; j++)
 		{
 			fscanf(fp, "%f %f", &Outlines[i]->pts[j].x, &Outlines[i]->pts[j].y);
-			Outlines[i]->pts[j].x *= .02;
-			Outlines[i]->pts[j].y *= .02;
+			Outlines[i]->pts[j].x = Outlines[i]->pts[j].x / 36.65;
+			Outlines[i]->pts[j].y = Outlines[i]->pts[j].y / 22.65;
 		}
 	}
 
@@ -970,7 +1130,9 @@ MouseMotion( int x, int y )
 void
 Reset( )
 {
-
+	BreaklinesOn = false;
+	RadioOption = HB_OFF;
+	KCurrent = .2;
 	ActiveButton = 0;
 	AxesOn = false;
 	DebugOn = GLUIFALSE;
